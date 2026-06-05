@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { getReport, generateCurriculum } from "@/lib/api";
-import type { DiagnosisReport } from "@/lib/api";
+import { Button } from "../../../components/ui/button";
+import { Card, CardContent } from "../../../components/ui/card";
+import { Badge } from "../../../components/ui/badge";
+import { Separator } from "../../../components/ui/separator";
+import { getReport, generateCurriculum } from "../../../lib/api";
+import type { DiagnosisReport } from "../../../lib/api";
 import { ClipboardList, TrendingUp, AlertTriangle, Target, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
 
 const levelCfg: Record<string, { bar: string; label: string }> = {
@@ -78,13 +78,11 @@ export default function ReportPage() {
       </Card>
 
       <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
+        <CardContent className="space-y-3 pt-6">
+          <h3 className="text-sm font-medium flex items-center gap-2 text-slate-700">
             <TrendingUp className="w-4 h-4 text-sky-600" />
             知识掌握情况
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </h3>
           {report.scores.map((s, i) => {
             const cfg = levelCfg[s.level] || levelCfg.unknown;
             return (
@@ -92,7 +90,7 @@ export default function ReportPage() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-700">{s.category}</span>
                   <div className="flex items-center gap-2">
-                    <Badge className={`text-xs ${cfg.bar.replace('bg-', 'bg-').replace('-500', '-50')} ${cfg.bar.replace('bg-', 'text-').replace('-500', '-700')}`}>{cfg.label}</Badge>
+                    <Badge variant="outline" className={`text-xs ${cfg.bar.replace('bg-', 'text-').replace('-500', '-700')}`}>{cfg.label}</Badge>
                     <span className="text-slate-500 w-8 text-right">{Math.round(s.score)}</span>
                   </div>
                 </div>
@@ -107,36 +105,32 @@ export default function ReportPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="border-0 shadow-sm bg-green-50/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-green-700">
+          <div className="p-4">
+            <h3 className="text-sm font-medium flex items-center gap-2 text-green-700 mb-2">
               <CheckCircle2 className="w-4 h-4" /> 优势
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
             <ul className="space-y-1">
               {report.strengths.map((s, i) => <li key={i} className="text-sm text-slate-700 flex gap-2"><span className="text-green-500">•</span>{s}</li>)}
             </ul>
-          </CardContent>
+          </div>
         </Card>
         <Card className="border-0 shadow-sm bg-red-50/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-red-700">
+          <div className="p-4">
+            <h3 className="text-sm font-medium flex items-center gap-2 text-red-700 mb-2">
               <AlertTriangle className="w-4 h-4" /> 待加强
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
             <ul className="space-y-1">
               {report.weaknesses.map((w, i) => <li key={i} className="text-sm text-slate-700 flex gap-2"><span className="text-red-500">•</span>{w}</li>)}
             </ul>
-          </CardContent>
+          </div>
         </Card>
       </div>
 
       <Card className="border-0 shadow-sm bg-white">
-        <CardContent className="p-4 flex gap-3">
+        <div className="p-4 flex gap-3">
           <Target className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
           <p className="text-sm text-slate-600 leading-relaxed">{report.summary}</p>
-        </CardContent>
+        </div>
       </Card>
 
       <Separator />

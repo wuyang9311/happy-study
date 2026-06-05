@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { submitAnswer, getReport } from "@/lib/api";
-import type { Question } from "@/lib/api";
+import { Button } from "../../../components/ui/button";
+import { Card, CardContent } from "../../../components/ui/card";
+import { Progress } from "../../../components/ui/progress";
+import { ScrollArea } from "../../../components/ui/scroll-area";
+import { Badge } from "../../../components/ui/badge";
+import { submitAnswer, getReport } from "../../../lib/api";
+import type { Question } from "../../../lib/api";
 import { Send, Loader2, Brain } from "lucide-react";
 
 const diffBg: Record<string, string> = {

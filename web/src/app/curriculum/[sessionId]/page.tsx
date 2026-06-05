@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { getReport, generateCurriculum } from "@/lib/api";
-import type { Curriculum, DiagnosisReport } from "@/lib/api";
+import { Button } from "../../../components/ui/button";
+import { Card, CardContent } from "../../../components/ui/card";
+import { Badge } from "../../../components/ui/badge";
+import { Separator } from "../../../components/ui/separator";
+import { getReport, generateCurriculum } from "../../../lib/api";
+import type { Curriculum, DiagnosisReport } from "../../../lib/api";
 import { BookOpen, Calendar, Loader2, Target, Sparkles, ChevronRight, Clock, Layers } from "lucide-react";
 
 const diffIco: Record<string, string> = { beginner: "🌱", intermediate: "🌿", advanced: "🌳" };
@@ -58,10 +58,10 @@ export default function CurriculumPage() {
       </div>
 
       <Card className="border-0 shadow-sm bg-gradient-to-r from-sky-50 to-blue-50">
-        <CardContent className="p-4 flex gap-3">
+        <div className="p-4 flex gap-3">
           <Target className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
           <p className="text-sm text-slate-600 leading-relaxed">{curriculum.goal}</p>
-        </CardContent>
+        </div>
       </Card>
 
       <Separator />
@@ -69,18 +69,18 @@ export default function CurriculumPage() {
       {report && (
         <div className="grid grid-cols-2 gap-3">
           <Card className="border-0 shadow-sm bg-green-50/50">
-            <CardContent className="p-3 text-center">
+            <div className="p-3 text-center">
               <p className="text-xs text-slate-500">当前水平</p>
               <p className="text-2xl font-bold text-green-600">{Math.round(report.overall_score)}</p>
               <p className="text-xs text-slate-400">{report.target_level}</p>
-            </CardContent>
+            </div>
           </Card>
           <Card className="border-0 shadow-sm bg-blue-50/50">
-            <CardContent className="p-3 text-center">
+            <div className="p-3 text-center">
               <p className="text-xs text-slate-500">目标可达</p>
               <p className="text-2xl font-bold text-blue-600">{Math.min(100, Math.round(report.overall_score + 30))}</p>
               <p className="text-xs text-slate-400">约 {report.estimated_weeks} 周</p>
-            </CardContent>
+            </div>
           </Card>
         </div>
       )}
@@ -92,7 +92,7 @@ export default function CurriculumPage() {
         </h2>
         {curriculum.chapters.map((ch, i) => (
           <Card key={i} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
+            <div className="p-4">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center shrink-0 text-sm">
                   {diffIco[ch.difficulty] || "📖"}
@@ -112,7 +112,7 @@ export default function CurriculumPage() {
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-300 shrink-0 mt-2" />
               </div>
-            </CardContent>
+            </div>
           </Card>
         ))}
       </div>

@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { startDiagnosis } from "@/lib/api";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { startDiagnosis } from "../lib/api";
 import { GraduationCap, Sparkles, ArrowRight, Brain, BookOpen } from "lucide-react";
 
 export default function Home() {
@@ -35,9 +35,7 @@ export default function Home() {
           <GraduationCap className="w-8 h-8 text-white" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-sky-600 to-blue-700 bg-clip-text text-transparent">
-            Happy Study
-          </h1>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-sky-600 to-blue-700 bg-clip-text text-transparent">Happy Study</h1>
           <p className="text-slate-500 text-sm">AI 驱动 · 先考后学</p>
         </div>
       </div>
