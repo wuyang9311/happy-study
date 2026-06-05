@@ -20,6 +20,7 @@ export default function Home() {
     setError("");
     try {
       const data = await startDiagnosis(topic);
+      sessionStorage.setItem(`questions_${data.session_id}`, JSON.stringify([data.question]));
       router.push(`/interview/${data.session_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "启动失败，请检查后端服务是否运行");

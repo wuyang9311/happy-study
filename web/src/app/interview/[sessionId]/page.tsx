@@ -63,6 +63,9 @@ export default function InterviewPage() {
         await getReport(sessionId);
         router.push(`/report/${sessionId}`);
       } else {
+        if (res.question) {
+          setQuestions(prev => [...prev, res.question!]);
+        }
         setCurrentIndex(i => i + 1);
       }
     } catch (err) {
