@@ -10,12 +10,17 @@ import (
 	"os"
 	"strings"
 
+	"github.com/joho/godotenv"
+
 	agent "github.com/wuyang9311/happy-study/internal/agent"
 	"github.com/wuyang9311/happy-study/internal/agent/interviewer"
 	"github.com/wuyang9311/happy-study/internal/agent/teacher"
 )
 
 func main() {
+	// 加载 .env 文件（不存在则忽略）
+	_ = godotenv.Load()
+
 	// CLI 参数
 	topic := flag.String("topic", "", "学习主题，如 \"Go 并发编程\"")
 	goal := flag.String("goal", "面试 P6", "学习目标")
@@ -40,10 +45,10 @@ func main() {
 
 	ctx := context.Background()
 
-	// 读取 API Key
+	// 读取 API Key（先读环境变量，再读 .env）
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 	if apiKey == "" {
-		log.Fatal("请设置 DEEPSEEK_API_KEY 环境变量")
+		log.Fatal("请设置 DEEPSEEK_API_KEY 环境变量（或在 .env 文件中配置）")
 	}
 
 	llmConfig := &agent.LLMConfig{
