@@ -32,3 +32,6 @@ Thumbs.db
 # Environment
 .env
 .env.*
+
+# Go checksum file (generated locally)
+go.sum

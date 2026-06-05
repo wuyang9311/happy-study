@@ -4,6 +4,14 @@ A Go learning and development project.
 
 ## Getting Started
 
+First, initialize dependencies:
+
+```bash
+go mod tidy
+```
+
+Then build and run:
+
 ```bash
 # Build
 make build
