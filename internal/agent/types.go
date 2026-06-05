@@ -11,9 +11,9 @@ type TopicRequest struct {
 type Question struct {
 	ID         int    `json:"id"`
 	Content    string `json:"content"`
-	Category   string `json:"category"`  // 所属知识点类别
-	Difficulty string `json:"difficulty"` // easy/medium/hard
-	Round      string `json:"round"`     // 广度扫描/深度追问/综合题
+	Category   string `json:"category"`
+	Difficulty string `json:"difficulty"`
+	Round      string `json:"round"`
 }
 
 // Answer 用户回答
@@ -24,10 +24,10 @@ type Answer struct {
 
 // KnowledgeScore 知识点掌握度评分
 type KnowledgeScore struct {
-	Category string  `json:"category"` // 知识点名称
-	Score    float64 `json:"score"`    // 0-100
-	Level    string  `json:"level"`    // mastered/familiar/weak/unknown
-	Feedback string  `json:"feedback"` // 评价
+	Category string  `json:"category"`
+	Score    float64 `json:"score"`
+	Level    string  `json:"level"`
+	Feedback string  `json:"feedback"`
 }
 
 // DiagnosisReport 诊断报告

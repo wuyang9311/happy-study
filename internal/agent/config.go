@@ -6,7 +6,7 @@ import "os"
 type LLMConfig struct {
 	APIKey  string
 	BaseURL string
-	Model   string // deepseek-chat / deepseek-reasoner
+	Model   string
 }
 
 // DefaultLLMConfig 从环境变量读取默认配置
