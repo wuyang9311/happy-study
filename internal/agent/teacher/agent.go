@@ -16,6 +16,7 @@ import (
 type Teacher struct {
 	config *agent.LLMConfig
 	llm    *openai.ChatModel
+	ctx    context.Context
 }
 
 func NewTeacher(ctx context.Context, config *agent.LLMConfig) (*Teacher, error) {
@@ -27,10 +28,20 @@ func NewTeacher(ctx context.Context, config *agent.LLMConfig) (*Teacher, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create chat model: %w", err)
 	}
-	return &Teacher{config: config, llm: llm}, nil
+	return &Teacher{ctx: ctx, config: config, llm: llm}, nil
 }
 
-func (t *Teacher) GenerateCurriculum(ctx context.Context, report *agent.DiagnosisReport) (*agent.Curriculum, error) {
+// GenerateCurriculum 根据诊断报告生成个性化课程方案（API 用，使用存储的 ctx）
+func (t *Teacher) GenerateCurriculum(report *agent.DiagnosisReport) (*agent.Curriculum, error) {
+	return t.generateCurriculum(t.ctx, report)
+}
+
+// GenerateLesson 生成某章节的详细教案（API 用，使用存储的 ctx）
+func (t *Teacher) GenerateLesson(report *agent.DiagnosisReport, chapter *agent.CourseChapter) (*agent.LessonPlan, error) {
+	return t.generateLesson(t.ctx, report, chapter)
+}
+
+func (t *Teacher) generateCurriculum(ctx context.Context, report *agent.DiagnosisReport) (*agent.Curriculum, error) {
 	fmt.Println("\n📚 Teacher 正在根据诊断报告定制课程...")
 
 	var scoresStr strings.Builder
@@ -49,47 +60,7 @@ func (t *Teacher) GenerateCurriculum(ctx context.Context, report *agent.Diagnosi
 		scoresStr.WriteString(fmt.Sprintf("%s %s: %.0f/100 (%s)\n", icon, s.Category, s.Score, s.Level))
 	}
 
-	prompt := fmt.Sprintf(`你是一个资深技术讲师，正在为一对一辅导准备课程。
-
-学习者背景：
-- 学习主题：%s
-- 目标职级：%s
-- 综合掌握度：%.0f/100
-- 评估周期：%d 周
-
-知识掌握情况：
-%s
-
-薄弱项：%s
-优势项：%s
-
-综合评语：%s
-
-请生成个性化课程方案，要求：
-1. 已掌握的知识点直接跳过或仅做快速回顾
-2. 薄弱项作为重点课程，分配更多课时
-3. 每章要有明确的主题、知识点清单和预估耗时
-4. 课程难度递进，从基础到深入
-5. 最后安排综合实战和模拟面试
-
-以 JSON 格式返回：
-{
-  "topic": "%s",
-  "title": "课程总标题",
-  "goal": "课程目标描述",
-  "chapters": [
-    {
-      "title": "章节标题",
-      "description": "章节描述",
-      "duration": "预估学习时长",
-      "topics": ["知识点1", "知识点2"],
-      "difficulty": "beginner/intermediate/advanced"
-    }
-  ],
-  "total_weeks": 总周数
-}
-
-输出纯 JSON，不要 markdown 格式。`,
+	prompt := fmt.Sprintf(`你是一个资深技术讲师，正在为一对一辅导准备课程。\n\n学习者背景：\n- 学习主题：%s\n- 目标职级：%s\n- 综合掌握度：%.0f/100\n- 评估周期：%d 周\n\n知识掌握情况：\n%s\n\n薄弱项：%s\n优势项：%s\n\n综合评语：%s\n\n请生成个性化课程方案，要求：\n1. 已掌握的知识点直接跳过或仅做快速回顾\n2. 薄弱项作为重点课程，分配更多课时\n3. 每章要有明确的主题、知识点清单和预估耗时\n4. 课程难度递进\n5. 最后安排综合实战和模拟面试\n\n以 JSON 格式返回：\n{\n  "topic": "%s",\n  "title": "课程总标题",\n  "goal": "课程目标描述",\n  "chapters": [\n    {\n      "title": "章节标题",\n      "description": "章节描述",\n      "duration": "预估学习时长",\n      "topics": ["知识点1", "知识点2"],\n      "difficulty": "beginner/intermediate/advanced"\n    }\n  ],\n  "total_weeks": 总周数\n}\n\n输出纯 JSON，不要 markdown 格式。`,
 		report.Topic, report.TargetLevel, report.OverallScore, report.EstimatedWeeks,
 		scoresStr.String(),
 		strings.Join(report.Weaknesses, "、"),
@@ -110,39 +81,10 @@ func (t *Teacher) GenerateCurriculum(ctx context.Context, report *agent.Diagnosi
 	return parseCurriculum(resp.Content)
 }
 
-func (t *Teacher) GenerateLesson(ctx context.Context, report *agent.DiagnosisReport, chapter *agent.CourseChapter) (*agent.LessonPlan, error) {
+func (t *Teacher) generateLesson(ctx context.Context, report *agent.DiagnosisReport, chapter *agent.CourseChapter) (*agent.LessonPlan, error) {
 	fmt.Printf("\n📖 Teacher 正在编写「%s」章节的详细内容...\n", chapter.Title)
 
-	prompt := fmt.Sprintf(`你是一个资深技术讲师，正在为学生编写详细教案。
-
-学生背景：
-- 主题：%s
-- 综合掌握度：%.0f/100
-- 薄弱项：%s
-
-章节信息：
-- 标题：%s
-- 描述：%s
-- 知识点：%s
-- 难度：%s
-
-请编写这一节的详细教学内容，要求：
-1. 用通俗易懂的语言讲解
-2. 包含具体的代码示例
-3. 指出常见的坑和面试考点
-4. 最后出一道练习题
-
-以 JSON 格式返回：
-{
-  "chapter_title": "章节标题",
-  "section_title": "本节标题",
-  "content": "详细教学内容（支持 markdown 格式）",
-  "code_examples": ["代码示例1", "代码示例2"],
-  "key_points": ["要点1", "要点2"],
-  "practice_question": "练习题"
-}
-
-输出纯 JSON，不要 markdown 格式。`,
+	prompt := fmt.Sprintf(`你是一个资深技术讲师，正在为学生编写详细教案。\n\n学生背景：\n- 主题：%s\n- 综合掌握度：%.0f/100\n- 薄弱项：%s\n\n章节信息：\n- 标题：%s\n- 描述：%s\n- 知识点：%s\n- 难度：%s\n\n请编写这一节的详细教学内容，要求：\n1. 用通俗易懂的语言讲解\n2. 包含具体的代码示例\n3. 指出常见的坑和面试考点\n4. 最后出一道练习题\n\n以 JSON 格式返回：\n{\n  "chapter_title": "章节标题",\n  "section_title": "本节标题",\n  "content": "详细教学内容",\n  "code_examples": ["代码示例1"],\n  "key_points": ["要点1"],\n  "practice_question": "练习题"\n}\n\n输出纯 JSON，不要 markdown 格式。`,
 		report.Topic, report.OverallScore, strings.Join(report.Weaknesses, "、"),
 		chapter.Title, chapter.Description, strings.Join(chapter.Topics, "、"), chapter.Difficulty)
 
