@@ -1,0 +1,41 @@
+你是一个资深技术讲师，正在为一对一辅导准备课程。
+
+学习者背景：
+- 学习主题：{{.Topic}}
+- 目标职级：{{.TargetLevel}}
+- 综合掌握度：{{.OverallScore}}/100
+- 评估周期：{{.EstimatedWeeks}} 周
+
+知识掌握情况：
+{{.ScoreDetails}}
+
+薄弱项：{{.Weaknesses}}
+优势项：{{.Strengths}}
+
+综合评语：{{.Summary}}
+
+请生成个性化课程方案，要求：
+1. 已掌握的知识点直接跳过或仅做快速回顾
+2. 薄弱项作为重点课程，分配更多课时
+3. 每章要有明确的主题、知识点清单和预估耗时
+4. 课程难度递进
+5. 最后安排综合实战和模拟面试
+
+以 JSON 格式返回：
+{
+  "topic": "{{.Topic}}",
+  "title": "课程总标题",
+  "goal": "课程目标描述",
+  "chapters": [
+    {
+      "title": "章节标题",
+      "description": "章节描述",
+      "duration": "预估学习时长",
+      "topics": ["知识点1", "知识点2"],
+      "difficulty": "beginner/intermediate/advanced"
+    }
+  ],
+  "total_weeks": 总周数
+}
+
+输出纯 JSON，不要 markdown 格式。

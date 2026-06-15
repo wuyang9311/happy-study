@@ -1,223 +1,281 @@
 package service
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	agent "github.com/wuyang9311/happy-study/internal/agent"
 	"github.com/wuyang9311/happy-study/internal/agent/interviewer"
 	"github.com/wuyang9311/happy-study/internal/agent/teacher"
+	"github.com/wuyang9311/happy-study/internal/store"
 )
 
-// Session 一次学习会话（纯内存）
-type Session struct {
-	ID            string
-	Topic         string
-	Goal          string
-	Questions     []agent.Question
-	Answers       []agent.Answer
-	CurrentIndex  int
-	Report        *agent.DiagnosisReport
-	Curriculum    *agent.Curriculum
-	CreatedAt     time.Time
-
-	interviewer    *interviewer.Interviewer
-	teacher        *teacher.Teacher
-}
-
-// SessionManager 内存会话管理器
+// SessionManager 会话管理器（持久化 + Agent 解耦）
 type SessionManager struct {
-	mu       sync.RWMutex
-	sessions map[string]*Session
-	counter  int
+	mu          sync.RWMutex
+	store       store.SessionStore
+	counter     int
+	interviewer *interviewer.Interviewer
+	teacher     *teacher.Teacher
 }
 
-func NewSessionManager() *SessionManager {
+func NewSessionManager(s store.SessionStore, intv *interviewer.Interviewer, tchr *teacher.Teacher) *SessionManager {
 	return &SessionManager{
-		sessions: make(map[string]*Session),
+		store:       s,
+		counter:     s.Count(),
+		interviewer: intv,
+		teacher:     tchr,
 	}
 }
 
-func (sm *SessionManager) CreateSession(intv *interviewer.Interviewer, tchr *teacher.Teacher, topic, goal string) (*Session, error) {
+func (sm *SessionManager) CreateSession(topic, goal string, userID int64) (*store.SessionData, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
 	sm.counter++
 	sessionID := fmt.Sprintf("session_%d_%d", time.Now().Unix(), sm.counter)
 
-	session := &Session{
-		ID:          sessionID,
-		Topic:       topic,
-		Goal:        goal,
-		CreatedAt:   time.Now(),
-		interviewer: intv,
-		teacher:     tchr,
+	sd := &store.SessionData{
+		ID:        sessionID,
+		UserID:    userID,
+		Topic:     topic,
+		Goal:      goal,
+		CreatedAt: time.Now().Format(time.RFC3339),
 	}
 
-	sm.sessions[sessionID] = session
-	return session, nil
-}
-
-func (sm *SessionManager) GetCurrentQuestion(sessionID string) (*agent.Question, error) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	session, ok := sm.sessions[sessionID]
-	if !ok {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
+	if err := sm.store.Save(sd); err != nil {
+		return nil, fmt.Errorf("save session: %w", err)
 	}
 
-	if session.CurrentIndex >= len(session.Questions) {
-		return nil, nil
-	}
-
-	return &session.Questions[session.CurrentIndex], nil
+	return sd, nil
 }
 
 func (sm *SessionManager) SubmitAnswer(sessionID string, questionID int, content string) (*agent.Question, bool, error) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	session, ok := sm.sessions[sessionID]
-	if !ok {
-		return nil, false, fmt.Errorf("session not found: %s", sessionID)
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return nil, false, err
 	}
 
-	session.Answers = append(session.Answers, agent.Answer{
+	sd.Answers = append(sd.Answers, agent.Answer{
 		QuestionID: questionID,
 		Content:    content,
 	})
 
-	session.CurrentIndex++
+	sd.CurrentIndex++
 
-	if session.CurrentIndex >= len(session.Questions) {
+	if err := sm.store.Save(sd); err != nil {
+		return nil, false, fmt.Errorf("save after answer: %w", err)
+	}
+
+	if sd.CurrentIndex >= len(sd.Questions) {
 		return nil, true, nil
 	}
 
-	return &session.Questions[session.CurrentIndex], false, nil
+	return &sd.Questions[sd.CurrentIndex], false, nil
 }
 
-func (sm *SessionManager) GenerateReport(sessionID string) (*agent.DiagnosisReport, error) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	session, ok := sm.sessions[sessionID]
-	if !ok {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
+func (sm *SessionManager) SetQuestions(sessionID string, questions []agent.Question) error {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return err
 	}
 
-	if session.Report != nil {
-		return session.Report, nil
+	sd.Questions = questions
+	return sm.store.Save(sd)
+}
+
+func (sm *SessionManager) GenerateReport(ctx context.Context, sessionID string) (*agent.DiagnosisReport, error) {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	if sd.Report != nil {
+		return sd.Report, nil
 	}
 
 	req := &agent.TopicRequest{
-		Topic: session.Topic,
-		Goal:  session.Goal,
+		Topic: sd.Topic,
+		Goal:  sd.Goal,
 	}
 
-	report, err := session.interviewer.GenerateReport(req, session.Answers)
+	report, err := sm.interviewer.GenerateReport(ctx, req, sd.Answers)
 	if err != nil {
 		return nil, fmt.Errorf("generate report: %w", err)
 	}
-	session.Report = report
+
+	sd.Report = report
+	if err := sm.store.Save(sd); err != nil {
+		return nil, fmt.Errorf("save report: %w", err)
+	}
+
 	return report, nil
 }
 
-func (sm *SessionManager) GenerateCurriculum(sessionID string) (*agent.Curriculum, error) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	session, ok := sm.sessions[sessionID]
-	if !ok {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
+func (sm *SessionManager) GenerateCurriculum(ctx context.Context, sessionID string) (*agent.Curriculum, error) {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return nil, err
 	}
 
-	if session.Report == nil {
+	if sd.Report == nil {
 		return nil, fmt.Errorf("report not generated yet")
 	}
 
-	if session.Curriculum != nil {
-		return session.Curriculum, nil
+	if sd.Curriculum != nil {
+		return sd.Curriculum, nil
 	}
 
-	curriculum, err := session.teacher.GenerateCurriculum(session.Report)
+	curriculum, err := sm.teacher.GenerateCurriculum(ctx, sd.Report)
 	if err != nil {
 		return nil, fmt.Errorf("generate curriculum: %w", err)
 	}
-	session.Curriculum = curriculum
+
+	sd.Curriculum = curriculum
+	if err := sm.store.Save(sd); err != nil {
+		return nil, fmt.Errorf("save curriculum: %w", err)
+	}
+
 	return curriculum, nil
 }
 
 func (sm *SessionManager) GetReport(sessionID string) (*agent.DiagnosisReport, error) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	session, ok := sm.sessions[sessionID]
-	if !ok {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return nil, err
 	}
-	if session.Report == nil {
+	if sd.Report == nil {
 		return nil, fmt.Errorf("report not ready yet")
 	}
-	return session.Report, nil
+	return sd.Report, nil
 }
 
 func (sm *SessionManager) GetCurriculum(sessionID string) (*agent.Curriculum, error) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	session, ok := sm.sessions[sessionID]
-	if !ok {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return nil, err
 	}
-	if session.Curriculum == nil {
+	if sd.Curriculum == nil {
 		return nil, fmt.Errorf("curriculum not ready yet")
 	}
-	return session.Curriculum, nil
+	return sd.Curriculum, nil
 }
 
 func (sm *SessionManager) GetSessionInfo(sessionID string) map[string]interface{} {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	session, ok := sm.sessions[sessionID]
-	if !ok {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
 		return nil
 	}
 
-	done := session.CurrentIndex >= len(session.Questions)
+	done := sd.CurrentIndex >= len(sd.Questions)
 	return map[string]interface{}{
-		"session_id":       session.ID,
-		"topic":            session.Topic,
-		"goal":             session.Goal,
-		"current_index":    session.CurrentIndex,
-		"total_questions":  len(session.Questions),
+		"session_id":       sd.ID,
+		"topic":            sd.Topic,
+		"goal":             sd.Goal,
+		"current_index":    sd.CurrentIndex,
+		"total_questions":  len(sd.Questions),
 		"all_done":         done,
-		"report_ready":     session.Report != nil,
-		"curriculum_ready": session.Curriculum != nil,
-		"created_at":       session.CreatedAt,
+		"report_ready":     sd.Report != nil,
+		"curriculum_ready": sd.Curriculum != nil,
+		"created_at":       sd.CreatedAt,
 	}
 }
 
 func (sm *SessionManager) GetTotalQuestions(sessionID string) int {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	session, ok := sm.sessions[sessionID]
-	if !ok {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
 		return 0
 	}
-	return len(session.Questions)
+	return len(sd.Questions)
 }
 
 func (sm *SessionManager) GetCurrentNumber(sessionID string) int {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	session, ok := sm.sessions[sessionID]
-	if !ok {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
 		return 0
 	}
-	return session.CurrentIndex + 1
+	return sd.CurrentIndex + 1
+}
+
+// ListUserCourses 列出某个用户的所有已生成课程方案的会话
+func (sm *SessionManager) ListUserCourses(userID int64) []*store.SessionData {
+	sessions := sm.store.ListByUser(userID)
+	var courses []*store.SessionData
+	for _, sd := range sessions {
+		if sd.Curriculum != nil {
+			courses = append(courses, sd)
+		}
+	}
+	return courses
+}
+
+// GetSessionStoreData 直接获取 Store 中的 SessionData
+func (sm *SessionManager) GetSessionStoreData(sessionID string) (*store.SessionData, error) {
+	return sm.store.Get(sessionID)
+}
+
+// SaveLessonPlan 缓存生成的教案
+func (sm *SessionManager) SaveLessonPlan(sessionID string, chapterIndex int, plan *agent.LessonPlan) error {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return err
+	}
+	if sd.LessonPlans == nil {
+		sd.LessonPlans = make(map[int]*agent.LessonPlan)
+	}
+	sd.LessonPlans[chapterIndex] = plan
+	return sm.store.Save(sd)
+}
+
+// ====== 自适应诊断辅助方法 ======
+
+// SaveSessionData 直接保存 SessionData
+func (sm *SessionManager) SaveSessionData(sd *store.SessionData) error {
+	return sm.store.Save(sd)
+}
+
+// AppendQuestion 向会话追加一道题
+func (sm *SessionManager) AppendQuestion(sessionID string, q agent.Question) error {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return err
+	}
+	sd.Questions = append(sd.Questions, q)
+	return sm.store.Save(sd)
+}
+
+// AppendAnswer 向会话追加一个答案（不管理索引）
+func (sm *SessionManager) AppendAnswer(sessionID string, content string) error {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return err
+	}
+	nextID := len(sd.Questions) // 当前问题索引
+	sd.Answers = append(sd.Answers, agent.Answer{
+		QuestionID: nextID,
+		Content:    content,
+	})
+	return sm.store.Save(sd)
+}
+
+// BuildConversation 从会话中构建对话文本（用于 LLM 上下文）
+func (sm *SessionManager) BuildConversation(sessionID string) (string, error) {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	for i, q := range sd.Questions {
+		b.WriteString(fmt.Sprintf("面试官[%s]（%s）: %s\n", q.Category, q.Difficulty, q.Content))
+		if i < len(sd.Answers) {
+			b.WriteString(fmt.Sprintf("候选人: %s\n", sd.Answers[i].Content))
+		} else {
+			b.WriteString("候选人: （尚未回答）\n")
+		}
+		b.WriteString("\n")
+	}
+	return b.String(), nil
 }

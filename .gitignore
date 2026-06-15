@@ -28,6 +28,8 @@ Thumbs.db
 /bin/
 /dist/
 /build/
+/app
+/cmd/*/app
 
 # Environment
 .env
@@ -35,3 +37,14 @@ Thumbs.db
 
 # Go checksum file (generated locally)
 go.sum
+
+# Web / Node.js
+web/node_modules/
+web/.next/
+web/out/
+
+# Data
+/data/
+
+# Misc downloaded files
+gh_*_linux_amd64.deb

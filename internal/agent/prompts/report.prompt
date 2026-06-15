@@ -1,0 +1,33 @@
+你是一个资深技术面试官，基于以下面试问答记录，生成一份详细的诊断报告。
+
+学习主题：{{.Topic}}
+目标职级：{{.Goal}}
+
+问答记录：
+{{.QAText}}
+
+请分析候选人的知识掌握情况，以 JSON 格式返回：
+
+{
+  "topic": "{{.Topic}}",
+  "overall_score": 整体掌握度(0-100),
+  "scores": [
+    {
+      "category": "知识点名称",
+      "score": 掌握度(0-100),
+      "level": "mastered|familiar|weak|unknown",
+      "feedback": "具体评价"
+    }
+  ],
+  "weaknesses": ["薄弱点1", "薄弱点2"],
+  "strengths": ["优势1", "优势2"],
+  "summary": "综合评语",
+  "target_level": "推荐目标职级",
+  "estimated_weeks": 推荐学习周期(周)
+}
+
+要求：
+1. 知识点按主题的实际情况细分
+2. 评分要客观
+3. 评语要具体有针对性
+4. 输出纯 JSON，不要 markdown 格式

@@ -5,33 +5,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	agent "github.com/wuyang9311/happy-study/internal/agent"
+	"github.com/wuyang9311/happy-study/internal/common"
+	"github.com/wuyang9311/happy-study/internal/llm"
 
-	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/schema"
 )
 
 // Interviewer 面试官 Agent
 type Interviewer struct {
-	config *agent.LLMConfig
-	llm    *openai.ChatModel
-	ctx    context.Context
+	provider llm.Provider
+	prompts  *agent.PromptManager
 }
 
 // NewInterviewer 创建面试官
-func NewInterviewer(ctx context.Context, config *agent.LLMConfig) (*Interviewer, error) {
-	llm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		Model:   config.Model,
-		APIKey:  config.APIKey,
-		BaseURL: config.BaseURL,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create chat model: %w", err)
-	}
-	return &Interviewer{ctx: ctx, config: config, llm: llm}, nil
+func NewInterviewer(provider llm.Provider, prompts *agent.PromptManager) *Interviewer {
+	return &Interviewer{provider: provider, prompts: prompts}
 }
 
 // ConductDiagnosis 执行诊断面试（三遍扫描）— CLI 交互版本
@@ -114,8 +107,172 @@ func (iv *Interviewer) ConductDiagnosis(ctx context.Context, req *agent.TopicReq
 	return report, nil
 }
 
+// ====== 自适应诊断（新） ======
+
+// AdaptiveQuestion LLM 返回的下一题
+type AdaptiveQuestion struct {
+	Content    string `json:"content"`
+	Category   string `json:"category"`
+	Difficulty string `json:"difficulty"`
+}
+
+// AdaptiveResponse LLM 返回的完整响应
+type AdaptiveResponse struct {
+	Action        string           `json:"action"` // "ask" or "done"
+	Question      *AdaptiveQuestion `json:"question,omitempty"`
+	Summary       string           `json:"summary,omitempty"`
+	Confidence    string           `json:"confidence,omitempty"`
+	QuestionsAsked int             `json:"questions_asked,omitempty"`
+}
+
+// GenerateFirstQuestion 生成诊断的第一道题
+func (iv *Interviewer) GenerateFirstQuestion(ctx context.Context, topic, goal string) (*AdaptiveQuestion, error) {
+	resp, err := iv.generateAdaptiveQuestion(ctx, topic, goal, "", 0)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Action != "ask" || resp.Question == nil {
+		return nil, fmt.Errorf("unexpected response: LLM returned done instead of question")
+	}
+	return resp.Question, nil
+}
+
+// GenerateNextQuestion 根据对话历史生成下一题（或标记完成）
+func (iv *Interviewer) GenerateNextQuestion(ctx context.Context, topic, goal string, conversation string, questionsAsked int) (*AdaptiveResponse, error) {
+	resp, err := iv.generateAdaptiveQuestion(ctx, topic, goal, conversation, questionsAsked)
+	if err != nil {
+		return nil, err
+	}
+	// generateAdaptiveQuestion already parsed the response
+	return resp, nil
+}
+
+// generateAdaptiveQuestion 调用 LLM 生成自适应问题
+func (iv *Interviewer) generateAdaptiveQuestion(ctx context.Context, topic, goal string, conversation string, questionsAsked int) (*AdaptiveResponse, error) {
+	if conversation == "" {
+		conversation = "（尚未提问，请生成第一道题）"
+	}
+
+	prompt, err := iv.prompts.Render("adaptive_interview", map[string]interface{}{
+		"Topic":        topic,
+		"Goal":         goal,
+		"Conversation": conversation,
+		"QuestionsAsked": questionsAsked,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("render adaptive prompt: %w", err)
+	}
+
+	messages := []*schema.Message{
+		schema.SystemMessage("你是一个资深技术面试官。输出严格的 JSON 格式，不要 markdown。"),
+		schema.UserMessage(prompt),
+	}
+
+	resp, err := iv.provider.Generate(ctx, messages)
+	if err != nil {
+		return nil, fmt.Errorf("llm generate: %w", err)
+	}
+
+	content := common.CleanJSON(resp.Content)
+
+	var result AdaptiveResponse
+	if err := json.Unmarshal([]byte(content), &result); err != nil {
+		return nil, fmt.Errorf("parse adaptive response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GenerateReportFromConversation 从对话历史生成诊断报告
+func (iv *Interviewer) GenerateReportFromConversation(ctx context.Context, req *agent.TopicRequest, conversation string) (*agent.DiagnosisReport, error) {
+	prompt, err := iv.prompts.Render("report", map[string]interface{}{
+		"Topic":  req.Topic,
+		"Goal":   req.Goal,
+		"QAText": conversation,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("render report prompt: %w", err)
+	}
+
+	messages := []*schema.Message{
+		schema.SystemMessage("你是一个严谨的面试评估专家，输出严格的 JSON 格式。"),
+		schema.UserMessage(prompt),
+	}
+
+	resp, err := iv.provider.Generate(ctx, messages)
+	if err != nil {
+		return nil, fmt.Errorf("llm generate report: %w", err)
+	}
+
+	return parseReport(resp.Content)
+}
+
+// StreamFirstQuestion 流式生成第一道题，逐 token 发送
+func (iv *Interviewer) StreamFirstQuestion(ctx context.Context, topic, goal string, cb func(token string) error) (*AdaptiveResponse, error) {
+	return iv.streamAdaptiveQuestion(ctx, topic, goal, "", 0, cb)
+}
+
+// StreamNextQuestion 流式生成下一题，逐 token 发送
+func (iv *Interviewer) StreamNextQuestion(ctx context.Context, topic, goal string, conversation string, questionsAsked int, cb func(token string) error) (*AdaptiveResponse, error) {
+	return iv.streamAdaptiveQuestion(ctx, topic, goal, conversation, questionsAsked, cb)
+}
+
+// streamAdaptiveQuestion 流式调用 LLM，逐 token 回调，返回完整解析结果
+func (iv *Interviewer) streamAdaptiveQuestion(ctx context.Context, topic, goal string, conversation string, questionsAsked int, cb func(token string) error) (*AdaptiveResponse, error) {
+	if conversation == "" {
+		conversation = "（尚未提问，请生成第一道题）"
+	}
+
+	prompt, err := iv.prompts.Render("adaptive_interview", map[string]interface{}{
+		"Topic":         topic,
+		"Goal":          goal,
+		"Conversation":  conversation,
+		"QuestionsAsked": questionsAsked,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("render adaptive prompt: %w", err)
+	}
+
+	messages := []*schema.Message{
+		schema.SystemMessage("你是一个资深技术面试官。输出严格的 JSON 格式，不要 markdown。"),
+		schema.UserMessage(prompt),
+	}
+
+	stream, err := iv.provider.GenerateStream(ctx, messages)
+	if err != nil {
+		return nil, fmt.Errorf("llm stream: %w", err)
+	}
+	defer stream.Close()
+
+	var fullContent strings.Builder
+	for {
+		msg, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("stream recv: %w", err)
+		}
+		token := msg.Content
+		fullContent.WriteString(token)
+		if cb != nil {
+			if err := cb(token); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	content := common.CleanJSON(fullContent.String())
+	var result AdaptiveResponse
+	if err := json.Unmarshal([]byte(content), &result); err != nil {
+		return nil, fmt.Errorf("parse adaptive response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // GenerateAllQuestions 生成所有面试题（API 用，非交互版）
-func (iv *Interviewer) GenerateAllQuestions(topic string) ([]agent.Question, error) {
+func (iv *Interviewer) GenerateAllQuestions(ctx context.Context, topic string) ([]agent.Question, error) {
 	var allQuestions []agent.Question
 
 	rounds := []struct {
@@ -128,7 +285,7 @@ func (iv *Interviewer) GenerateAllQuestions(topic string) ([]agent.Question, err
 	}
 
 	for _, r := range rounds {
-		questions, err := iv.generateQuestions(iv.ctx, topic, r.name, r.count)
+		questions, err := iv.generateQuestions(ctx, topic, r.name, r.count)
 		if err != nil {
 			return nil, fmt.Errorf("generate %s questions: %w", r.name, err)
 		}
@@ -139,20 +296,27 @@ func (iv *Interviewer) GenerateAllQuestions(topic string) ([]agent.Question, err
 }
 
 // GenerateReport 生成诊断报告（API 用，非交互版）
-func (iv *Interviewer) GenerateReport(req *agent.TopicRequest, answers []agent.Answer) (*agent.DiagnosisReport, error) {
-	return iv.generateReport(iv.ctx, req, answers)
+func (iv *Interviewer) GenerateReport(ctx context.Context, req *agent.TopicRequest, answers []agent.Answer) (*agent.DiagnosisReport, error) {
+	return iv.generateReport(ctx, req, answers)
 }
 
 // generateQuestions 用 LLM 生成面试题
 func (iv *Interviewer) generateQuestions(ctx context.Context, topic, round string, count int) ([]agent.Question, error) {
-	prompt := fmt.Sprintf(`你是一个资深技术面试官，正在面试候选人。\n\n主题：%s\n面试轮次：%s\n需要出题数量：%d\n\n请生成面试题，要求：\n1. 题目要覆盖主题的核心知识点\n2. 难度递进（从基础到进阶）\n3. 考察理解深度而非死记硬背\n4. 如果是 "%s" 轮次，出综合应用题\n\n请以 JSON 数组格式返回，每个元素包含：\n- id: 编号\n- content: 题目内容\n- category: 所属知识点分类\n- difficulty: easy/medium/hard\n- round: 当前轮次名称\n\n只返回 JSON，不要其他文字。`, topic, round, count, round)
+	prompt, err := iv.prompts.Render("interviewer_questions", map[string]interface{}{
+		"Topic": topic,
+		"Round": round,
+		"Count": count,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("render question prompt: %w", err)
+	}
 
 	messages := []*schema.Message{
 		schema.SystemMessage("你是一个资深技术面试官，擅长考察候选人的技术深度和广度。输出严格的 JSON 格式。"),
 		schema.UserMessage(prompt),
 	}
 
-	resp, err := iv.llm.Generate(ctx, messages)
+	resp, err := iv.provider.Generate(ctx, messages)
 	if err != nil {
 		return nil, fmt.Errorf("llm generate: %w", err)
 	}
@@ -161,7 +325,7 @@ func (iv *Interviewer) generateQuestions(ctx context.Context, topic, round strin
 }
 
 func parseQuestions(content string) ([]agent.Question, error) {
-	content = cleanJSON(content)
+	content = common.CleanJSON(content)
 
 	var questions []agent.Question
 	if err := json.Unmarshal([]byte(content), &questions); err != nil {
@@ -187,15 +351,21 @@ func (iv *Interviewer) generateReport(ctx context.Context, req *agent.TopicReque
 		qaBuilder.WriteString(fmt.Sprintf("A%d: %s\n", i+1, a.Content))
 	}
 
-	prompt := fmt.Sprintf(`你是一个资深技术面试官，基于以下面试问答记录，生成一份详细的诊断报告。\n\n学习主题：%s\n目标职级：%s\n\n问答记录：\n%s\n\n请分析候选人的知识掌握情况，以 JSON 格式返回：\n\n{\n  "topic": "%s",\n  "overall_score": 整体掌握度(0-100),\n  "scores": [\n    {\n      "category": "知识点名称",\n      "score": 掌握度(0-100),\n      "level": "mastered|familiar|weak|unknown",\n      "feedback": "具体评价"\n    }\n  ],\n  "weaknesses": ["薄弱点1", "薄弱点2"],\n  "strengths": ["优势1", "优势2"],\n  "summary": "综合评语",\n  "target_level": "推荐目标职级",\n  "estimated_weeks": 推荐学习周期(周)\n}\n\n要求：\n1. 知识点按主题的实际情况细分\n2. 评分要客观\n3. 评语要具体有针对性\n4. 输出纯 JSON，不要 markdown 格式`,
-		req.Topic, req.Goal, qaBuilder.String(), req.Topic)
+	prompt, err := iv.prompts.Render("report", map[string]interface{}{
+		"Topic":  req.Topic,
+		"Goal":   req.Goal,
+		"QAText": qaBuilder.String(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("render report prompt: %w", err)
+	}
 
 	messages := []*schema.Message{
 		schema.SystemMessage("你是一个严谨的面试评估专家，输出严格的 JSON 格式。"),
 		schema.UserMessage(prompt),
 	}
 
-	resp, err := iv.llm.Generate(ctx, messages)
+	resp, err := iv.provider.Generate(ctx, messages)
 	if err != nil {
 		return nil, fmt.Errorf("llm generate report: %w", err)
 	}
@@ -204,19 +374,10 @@ func (iv *Interviewer) generateReport(ctx context.Context, req *agent.TopicReque
 }
 
 func parseReport(content string) (*agent.DiagnosisReport, error) {
-	content = cleanJSON(content)
+	content = common.CleanJSON(content)
 	var report agent.DiagnosisReport
 	if err := json.Unmarshal([]byte(content), &report); err != nil {
 		return nil, fmt.Errorf("parse report: %w", err)
 	}
 	return &report, nil
-}
-
-func cleanJSON(content string) string {
-	content = strings.TrimSpace(content)
-	content = strings.TrimPrefix(content, "```json")
-	content = strings.TrimPrefix(content, "```")
-	content = strings.TrimSuffix(content, "```")
-	content = strings.TrimSpace(content)
-	return content
 }
