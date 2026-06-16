@@ -25,7 +25,7 @@ func main() {
 	_ = godotenv.Load()
 
 	// ========== 数据库初始化 ==========
-	mysqlDSN := getEnv("MYSQL_DSN", "root:qwer1234@tcp(172.30.48.1:3306)/happy_study?charset=utf8mb4&parseTime=True&loc=Local")
+	mysqlDSN := getEnv("MYSQL_DSN", "root:qwer1234@tcp(127.0.0.1:3306)/happy_study?charset=utf8mb4&parseTime=True&loc=Local")
 	if err := auth.InitDB(mysqlDSN); err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
 	}
