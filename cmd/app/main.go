@@ -108,6 +108,10 @@ func main() {
 
 		// 流式出题
 		api.GET("/diagnosis/question/:session_id", h.StreamFirstQuestion)
+
+		// 用户设置
+		api.GET("/user/settings", auth.GetUserSettings)
+		api.PUT("/user/settings/model", auth.UpdateUserModel)
 	}
 
 	// ========== 启动 ==========

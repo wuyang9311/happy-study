@@ -274,3 +274,53 @@ func GetProfile(ctx context.Context, c *app.RequestContext) {
 
 	c.JSON(http.StatusOK, UserInfoResp{User: user})
 }
+
+// GetUserSettings 获取用户设置
+func GetUserSettings(ctx context.Context, c *app.RequestContext) {
+	userID, _ := c.Get("user_id")
+	uid, ok := userID.(int64)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "认证信息无效"})
+		return
+	}
+
+	user, err := FindUserByID(uid)
+	if err != nil || user == nil {
+		c.JSON(http.StatusNotFound, utils.H{"error": "用户不存在"})
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.H{
+		"preferred_model": user.PreferredModel,
+	})
+}
+
+// UpdateUserModel 更新用户首选模型
+func UpdateUserModel(ctx context.Context, c *app.RequestContext) {
+	userID, _ := c.Get("user_id")
+	uid, ok := userID.(int64)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "认证信息无效"})
+		return
+	}
+
+	var req struct {
+		Model string `json:"model"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "参数格式错误"})
+		return
+	}
+
+	if req.Model == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "模型名称不能为空"})
+		return
+	}
+
+	if err := UpdatePreferredModel(uid, req.Model); err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "更新失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.H{"preferred_model": req.Model})
+}

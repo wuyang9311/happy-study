@@ -223,3 +223,21 @@ export async function getUserCourseDetail(sessionId: string): Promise<any> {
   if (!res.ok) throw new Error('获取课程详情失败');
   return res.json();
 }
+
+// ====== 用户设置 ======
+
+export async function getUserSettings(): Promise<{ preferred_model: string }> {
+  const res = await fetch(`${API_BASE}/user/settings`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('获取设置失败');
+  return res.json();
+}
+
+export async function updateUserModel(model: string): Promise<{ preferred_model: string }> {
+  const res = await fetch(`${API_BASE}/user/settings/model`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify({ model }),
+  });
+  if (!res.ok) throw new Error('更新模型失败');
+  return res.json();
+}

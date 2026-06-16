@@ -11,6 +11,8 @@ import (
 	agent "github.com/wuyang9311/happy-study/internal/agent"
 	"github.com/wuyang9311/happy-study/internal/agent/interviewer"
 	"github.com/wuyang9311/happy-study/internal/agent/teacher"
+	"github.com/wuyang9311/happy-study/internal/auth"
+	"github.com/wuyang9311/happy-study/internal/llm"
 	"github.com/wuyang9311/happy-study/internal/service"
 )
 
@@ -23,6 +25,20 @@ type Handler struct {
 
 func NewHandler(sm *service.SessionManager, intv *interviewer.Interviewer, tchr *teacher.Teacher) *Handler {
 	return &Handler{sessionMgr: sm, intv: intv, tchr: tchr}
+}
+
+// userModelContext 将用户的 preferred model 注入 context
+func (h *Handler) userModelContext(ctx context.Context, c *app.RequestContext) context.Context {
+	userID, _ := c.Get("user_id")
+	uid, ok := userID.(int64)
+	if !ok || uid == 0 {
+		return ctx
+	}
+	user, err := auth.FindUserByID(uid)
+	if err != nil || user == nil || user.PreferredModel == "" {
+		return ctx
+	}
+	return llm.WithUserModel(ctx, user.PreferredModel)
 }
 
 // ====== 自适应诊断（新） ======
@@ -114,8 +130,11 @@ func (h *Handler) SubmitAnswer(ctx context.Context, c *app.RequestContext) {
 
 	questionsAsked := len(sd.Answers)
 
+	// 注入用户偏好模型
+	llmCtx := h.userModelContext(ctx, c)
+
 	// 调用 LLM 生成下一题或结束
-	resp, err := h.intv.GenerateNextQuestion(ctx, sd.Topic, sd.Goal, conversation, questionsAsked)
+	resp, err := h.intv.GenerateNextQuestion(llmCtx, sd.Topic, sd.Goal, conversation, questionsAsked)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "生成下一题失败: " + err.Error()})
 		return
@@ -124,7 +143,7 @@ func (h *Handler) SubmitAnswer(ctx context.Context, c *app.RequestContext) {
 	if resp.Action == "done" {
 		// 诊断完成，生成报告
 		topicReq := &agent.TopicRequest{Topic: sd.Topic, Goal: sd.Goal}
-		report, err := h.intv.GenerateReportFromConversation(ctx, topicReq, conversation)
+		report, err := h.intv.GenerateReportFromConversation(llmCtx, topicReq, conversation)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, utils.H{"error": "生成报告失败: " + err.Error()})
 			return
@@ -202,8 +221,9 @@ func (h *Handler) StopDiagnosis(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	llmCtx := h.userModelContext(ctx, c)
 	ctxReq := &agent.TopicRequest{Topic: sd.Topic, Goal: sd.Goal}
-	report, err := h.intv.GenerateReportFromConversation(ctx, ctxReq, conversation)
+	report, err := h.intv.GenerateReportFromConversation(llmCtx, ctxReq, conversation)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "生成报告失败: " + err.Error()})
 		return
@@ -363,8 +383,10 @@ func (h *Handler) StreamFirstQuestion(ctx context.Context, c *app.RequestContext
 	// 先刷新一次 Header
 	c.Flush()
 
+	llmCtx := h.userModelContext(ctx, c)
+
 	// 流式生成第一道题
-	resp, err := h.intv.StreamFirstQuestion(ctx, sd.Topic, sd.Goal, func(token string) error {
+	resp, err := h.intv.StreamFirstQuestion(llmCtx, sd.Topic, sd.Goal, func(token string) error {
 		_, err := c.Write([]byte("data: " + token + "\n\n"))
 		if err != nil {
 			return err

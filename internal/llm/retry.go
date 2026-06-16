@@ -75,6 +75,14 @@ func (p *RetryProvider) GenerateStream(ctx context.Context, messages []*schema.M
 	return p.inner.GenerateStream(ctx, messages)
 }
 
+// WithModel 创建使用指定模型的 RetryProvider 副本（透传给 inner）
+func (p *RetryProvider) WithModel(model string) Provider {
+	return &RetryProvider{
+		inner: p.inner.WithModel(model),
+		cfg:   p.cfg,
+	}
+}
+
 // calcBackoff 计算指数退避延迟
 func calcBackoff(attempt int, base, max time.Duration) time.Duration {
 	// 2^(n-1) * base, capped at max

@@ -80,3 +80,9 @@ func UpdateLastLogin(userID int64) error {
 	return db.Model(&User{}).Where("id = ?", userID).
 		Update("last_login_at", &now).Error
 }
+
+// UpdatePreferredModel 更新用户首选的模型
+func UpdatePreferredModel(userID int64, model string) error {
+	return db.Model(&User{}).Where("id = ?", userID).
+		Update("preferred_model", model).Error
+}

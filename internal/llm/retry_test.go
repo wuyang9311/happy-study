@@ -28,6 +28,10 @@ func (m *mockProvider) GenerateStream(ctx context.Context, msgs []*schema.Messag
 	return nil, errors.New("not implemented in mock")
 }
 
+func (m *mockProvider) WithModel(model string) Provider {
+	return m
+}
+
 func TestRetryProvider_SuccessFirstTry(t *testing.T) {
 	msg := schema.UserMessage("ok")
 	mock := &mockProvider{msg: msg, failCount: 0}

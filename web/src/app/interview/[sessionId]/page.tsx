@@ -354,49 +354,48 @@ export default function InterviewPage() {
                 <span>AI 正在分析你的回答...</span>
               </div>
             )}
+
+            {!loading && currentQuestion && !diagnosisDone && !streamError && (
+              <div className="flex gap-2 pt-2">
+                <textarea
+                  ref={inputRef}
+                  value={currentAnswer}
+                  onChange={e => setCurrentAnswer(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); }}}
+                  placeholder="输入你的回答... (Enter 发送，Shift+Enter 换行)"
+                  className="flex-1 min-h-[56px] max-h-[120px] rounded-xl border border-border/80 bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-300 resize-none transition-all"
+                />
+                <Button onClick={handleSubmit}
+                  disabled={!currentAnswer.trim() || loading}
+                  className="h-[56px] w-[56px] shrink-0 bg-gradient-to-br from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-sm disabled:opacity-40 rounded-xl">
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                </Button>
+              </div>
+            )}
+
+            {!currentQuestion && !diagnosisDone && !streamError && (
+              <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                <span>正在生成第一道题...</span>
+              </div>
+            )}
+
+            {streamError && (
+              <div className="flex flex-col items-center gap-3 py-6 px-4 rounded-xl bg-red-50 border border-red-200/60">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <p className="text-xs text-red-600">{streamError}</p>
+                </div>
+                <Button onClick={() => fetchFirstQuestion(getToken() || "")}
+                  variant="outline"
+                  className="text-xs border-red-200/60 text-red-600 hover:bg-red-50 rounded-xl">
+                  重新加载
+                </Button>
+              </div>
+            )}
           </div>
         </ScrollArea>
       </Card>
-
-      {currentQuestion && !diagnosisDone && !streamError && (
-        <div className="flex gap-2">
-          <textarea
-            ref={inputRef}
-            value={currentAnswer}
-            onChange={e => setCurrentAnswer(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); }}}
-            placeholder="输入你的回答... (Enter 发送，Shift+Enter 换行)"
-            className="flex-1 min-h-[56px] max-h-[120px] rounded-xl border border-border/80 bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-300 resize-none transition-all"
-            disabled={loading}
-          />
-          <Button onClick={handleSubmit}
-            disabled={!currentAnswer.trim() || loading}
-            className="h-[56px] w-[56px] shrink-0 bg-gradient-to-br from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-sm disabled:opacity-40 rounded-xl">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </Button>
-        </div>
-      )}
-
-      {!currentQuestion && !diagnosisDone && !streamError && (
-        <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-          <span>正在生成第一道题...</span>
-        </div>
-      )}
-
-      {streamError && (
-        <div className="flex flex-col items-center gap-3 py-6 px-4 rounded-xl bg-red-50 border border-red-200/60">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-500" />
-            <p className="text-xs text-red-600">{streamError}</p>
-          </div>
-          <Button onClick={() => fetchFirstQuestion(getToken() || "")}
-            variant="outline"
-            className="text-xs border-red-200/60 text-red-600 hover:bg-red-50 rounded-xl">
-            重新加载
-          </Button>
-        </div>
-      )}
 
       {diagnosisDone && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">

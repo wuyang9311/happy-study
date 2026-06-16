@@ -15,8 +15,9 @@ type User struct {
 	Email        string         `gorm:"type:varchar(255);default:''" json:"email"`
 	Avatar       string         `gorm:"type:varchar(500);default:''" json:"avatar"`
 	Role         string         `gorm:"type:varchar(20);default:'user'" json:"role"`
-	Status       int8           `gorm:"type:tinyint;default:1;index" json:"status"`
-	LastLoginAt  *time.Time     `json:"last_login_at,omitempty"`
+	Status          int8           `gorm:"type:tinyint;default:1;index" json:"status"`
+	PreferredModel  string         `gorm:"type:varchar(100);default:''" json:"preferred_model"`
+	LastLoginAt     *time.Time     `json:"last_login_at,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`

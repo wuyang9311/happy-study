@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { getToken, removeToken, getProfile, type UserInfo } from "../lib/api";
-import { LogIn, UserPlus, LogOut, BookOpen } from "lucide-react";
+import { LogIn, UserPlus, LogOut, BookOpen, Settings } from "lucide-react";
 
 export default function Nav() {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -66,6 +66,13 @@ export default function Nav() {
                       className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
                     >
                       <BookOpen className="w-3.5 h-3.5" /> 我的课程
+                    </Link>
+                    <Link
+                      href="/profile/settings"
+                      onClick={() => setShowMenu(false)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                    >
+                      <Settings className="w-3.5 h-3.5" /> 设置
                     </Link>
                     <button
                       onClick={handleLogout}
