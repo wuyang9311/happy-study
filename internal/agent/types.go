@@ -69,3 +69,19 @@ type LessonPlan struct {
 	KeyPoints        []string `json:"key_points"`
 	PracticeQuestion string   `json:"practice_question"`
 }
+
+// Section 小节目录项
+type Section struct {
+	Title            string `json:"title"`
+	Description      string `json:"description"`
+	EstimatedMinutes int    `json:"estimated_minutes"`
+}
+
+// SectionContent 小节学习内容
+type SectionContent struct {
+	SectionTitle string   `json:"section_title"`
+	Content      string   `json:"content"`
+	CodeExamples []string `json:"code_examples"`
+	KeyPoints    []string `json:"key_points"`
+	PracticeTask string   `json:"practice_task"`
+}

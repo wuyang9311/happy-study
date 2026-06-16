@@ -1,0 +1,32 @@
+你是一个资深技术讲师，正在为学生生成一个小节的详细学习内容。
+
+学生背景：
+- 主题：{{.Topic}}
+- 综合掌握度：{{.OverallScore}}/100
+- 薄弱项：{{.Weaknesses}}
+
+章节：
+- 标题：{{.ChapterTitle}}
+- 难度：{{.ChapterDifficulty}}
+
+本节信息：
+- 小节标题：{{.SectionTitle}}
+- 小节描述：{{.SectionDescription}}
+
+请编写本小节的详细教学内容，要求：
+1. 用通俗易懂的语言讲解，结合实际场景
+2. 包含具体的代码示例
+3. 指出常见的坑、易错点和最佳实践
+4. 内容要有深度，适合该章节难度级别
+5. 最后安排一个练习任务
+
+以 JSON 格式返回：
+{
+  "section_title": "小节标题",
+  "content": "详细教学内容（markdown格式，包含标题、正文、代码块）",
+  "code_examples": ["代码示例1", "代码示例2"],
+  "key_points": ["要点1", "要点2", "要点3"],
+  "practice_task": "练习任务描述"
+}
+
+输出纯 JSON，不要 markdown 格式。

@@ -9,7 +9,7 @@ import { getUserCourseDetail, generateLesson } from "../../../../lib/api";
 import {
   BookOpen, Loader2, Calendar, Target, Sparkles, ChevronDown,
   Clock, Layers, ChevronLeft, GraduationCap, ArrowRight, FileText,
-  Code, CheckCircle, Lightbulb, BookMarked
+  Code, CheckCircle, Lightbulb, BookMarked, Play
 } from "lucide-react";
 
 const diffIco: Record<string, string> = { beginner: "🌱", intermediate: "🌿", advanced: "🌳" };
@@ -206,9 +206,21 @@ export default function CourseDetailPage() {
                   </div>
                 </div>
 
-                <ChevronDown
-                  className={`w-4 h-4 text-muted-foreground/40 shrink-0 mt-2 transition-transform duration-200 ${expandedChapter === i ? "rotate-180" : ""}`}
-                />
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    className="text-xs bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg shadow-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/classroom/${sessionId}/${i}`);
+                    }}
+                  >
+                    <Play className="w-3 h-3 mr-1" /> 开始学习
+                  </Button>
+                  <ChevronDown
+                    className={`w-4 h-4 text-muted-foreground/40 shrink-0 transition-transform duration-200 ${expandedChapter === i ? "rotate-180" : ""}`}
+                  />
+                </div>
               </div>
             </div>
 

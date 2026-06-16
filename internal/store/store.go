@@ -12,17 +12,19 @@ import (
 
 // SessionData 持久化的会话数据（不含 Agent 引用）
 type SessionData struct {
-	ID           string                     `json:"id"`
-	UserID       int64                      `json:"user_id"`
-	Topic        string                     `json:"topic"`
-	Goal         string                     `json:"goal"`
-	Questions    []agent.Question           `json:"questions"`
-	Answers      []agent.Answer             `json:"answers"`
-	CurrentIndex int                        `json:"current_index"`
-	Report       *agent.DiagnosisReport     `json:"report,omitempty"`
-	Curriculum   *agent.Curriculum          `json:"curriculum,omitempty"`
-	LessonPlans  map[int]*agent.LessonPlan  `json:"lesson_plans,omitempty"`
-	CreatedAt    string                     `json:"created_at"`
+	ID              string                        `json:"id"`
+	UserID          int64                         `json:"user_id"`
+	Topic           string                        `json:"topic"`
+	Goal            string                        `json:"goal"`
+	Questions       []agent.Question              `json:"questions"`
+	Answers         []agent.Answer                `json:"answers"`
+	CurrentIndex    int                           `json:"current_index"`
+	Report          *agent.DiagnosisReport        `json:"report,omitempty"`
+	Curriculum      *agent.Curriculum             `json:"curriculum,omitempty"`
+	LessonPlans     map[int]*agent.LessonPlan     `json:"lesson_plans,omitempty"`
+	SectionOutlines map[int][]agent.Section       `json:"section_outlines,omitempty"`  // chapter_index → sections
+	SectionContents map[string]*agent.SectionContent `json:"section_contents,omitempty"` // "chapIdx_secIdx" → content
+	CreatedAt       string                        `json:"created_at"`
 }
 
 // Store 持久化存储

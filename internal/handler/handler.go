@@ -439,6 +439,155 @@ type GenerateLessonReq struct {
 	ChapterIndex int    `json:"chapter_index"`
 }
 
+type GenerateSectionsReq struct {
+	SessionID    string `json:"session_id"`
+	ChapterIndex int    `json:"chapter_index"`
+}
+
+type SectionContentReq struct {
+	SessionID    string `json:"session_id"`
+	ChapterIndex int    `json:"chapter_index"`
+	SectionIndex int    `json:"section_index"`
+}
+
+// GenerateSections 生成某章的小节目录（带缓存）
+func (h *Handler) GenerateSections(ctx context.Context, c *app.RequestContext) {
+	var req GenerateSectionsReq
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "参数无效"})
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(int64)
+
+	sd, err := h.sessionMgr.GetSessionStoreData(req.SessionID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "课程不存在"})
+		return
+	}
+	if sd.UserID != uid {
+		c.JSON(http.StatusForbidden, utils.H{"error": "无权访问该课程"})
+		return
+	}
+	if sd.Curriculum == nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "课程方案未生成"})
+		return
+	}
+	if req.ChapterIndex < 0 || req.ChapterIndex >= len(sd.Curriculum.Chapters) {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "章节索引无效"})
+		return
+	}
+
+	// 检查缓存
+	cached, err := h.sessionMgr.GetSectionOutlines(req.SessionID, req.ChapterIndex)
+	if err == nil && len(cached) > 0 {
+		c.JSON(http.StatusOK, utils.H{"sections": cached})
+		return
+	}
+
+	// 生成小节目录
+	report, err := h.sessionMgr.GetReport(req.SessionID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "报告未就绪: " + err.Error()})
+		return
+	}
+
+	chapter := sd.Curriculum.Chapters[req.ChapterIndex]
+	llmCtx := h.userModelContext(ctx, c)
+	sections, err := h.tchr.GenerateSections(llmCtx, report, &chapter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "生成小节目录失败: " + err.Error()})
+		return
+	}
+
+	// 缓存
+	h.sessionMgr.SaveSectionOutlines(req.SessionID, req.ChapterIndex, sections)
+
+	c.JSON(http.StatusOK, utils.H{"sections": sections})
+}
+
+// GenerateSectionContent 生成某小节的学习内容（带缓存）
+func (h *Handler) GenerateSectionContent(ctx context.Context, c *app.RequestContext) {
+	var req SectionContentReq
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "参数无效"})
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(int64)
+
+	sd, err := h.sessionMgr.GetSessionStoreData(req.SessionID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "课程不存在"})
+		return
+	}
+	if sd.UserID != uid {
+		c.JSON(http.StatusForbidden, utils.H{"error": "无权访问该课程"})
+		return
+	}
+	if sd.Curriculum == nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "课程方案未生成"})
+		return
+	}
+	if req.ChapterIndex < 0 || req.ChapterIndex >= len(sd.Curriculum.Chapters) {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "章节索引无效"})
+		return
+	}
+
+	// 检查缓存
+	cached, err := h.sessionMgr.GetSectionContent(req.SessionID, req.ChapterIndex, req.SectionIndex)
+	if err == nil && cached != nil {
+		c.JSON(http.StatusOK, utils.H{"content": cached})
+		return
+	}
+
+	// 获取小节目录，验证 sectionIndex
+	sections, err := h.sessionMgr.GetSectionOutlines(req.SessionID, req.ChapterIndex)
+	if err != nil || len(sections) == 0 {
+		// 如果小节目录尚未生成，先生成
+		report, err := h.sessionMgr.GetReport(req.SessionID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "报告未就绪"})
+			return
+		}
+		chapter := sd.Curriculum.Chapters[req.ChapterIndex]
+		llmCtx := h.userModelContext(ctx, c)
+		sections, err = h.tchr.GenerateSections(llmCtx, report, &chapter)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": "生成小节目录失败: " + err.Error()})
+			return
+		}
+		h.sessionMgr.SaveSectionOutlines(req.SessionID, req.ChapterIndex, sections)
+	}
+
+	if req.SectionIndex < 0 || req.SectionIndex >= len(sections) {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "小节索引无效"})
+		return
+	}
+
+	report, err := h.sessionMgr.GetReport(req.SessionID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "报告未就绪"})
+		return
+	}
+
+	chapter := sd.Curriculum.Chapters[req.ChapterIndex]
+	section := sections[req.SectionIndex]
+	llmCtx := h.userModelContext(ctx, c)
+	content, err := h.tchr.GenerateSectionContent(llmCtx, report, &chapter, &section)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "生成学习内容失败: " + err.Error()})
+		return
+	}
+
+	// 缓存
+	h.sessionMgr.SaveSectionContent(req.SessionID, req.ChapterIndex, req.SectionIndex, content)
+
+	c.JSON(http.StatusOK, utils.H{"content": content})
+}
+
 // ====== 用户课程 ======
 
 type UserCourseResp struct {

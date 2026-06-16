@@ -1,0 +1,30 @@
+你是一个资深技术讲师，正在为课程拆分小节目录。
+
+学生背景：
+- 主题：{{.Topic}}
+- 综合掌握度：{{.OverallScore}}/100
+- 薄弱项：{{.Weaknesses}}
+
+章节信息：
+- 标题：{{.ChapterTitle}}
+- 描述：{{.ChapterDescription}}
+- 知识点：{{.ChapterTopics}}
+- 难度：{{.ChapterDifficulty}}
+
+请将这一章拆分成 4~8 个小节（section），每节聚焦一个独立的知识点或技能点。
+要求：
+1. 从前到后循序渐进
+2. 每节要有明确的学习目标
+3. 最后一个小节安排练习/实战
+4. 预估每节的学习时间（分钟）
+
+以 JSON 格式返回一个数组：
+[
+  {
+    "title": "小节标题",
+    "description": "本小节学习内容概述",
+    "estimated_minutes": 25
+  }
+]
+
+输出纯 JSON 数组，不要 markdown 格式。

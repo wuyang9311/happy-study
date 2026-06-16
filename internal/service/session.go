@@ -230,6 +230,66 @@ func (sm *SessionManager) SaveLessonPlan(sessionID string, chapterIndex int, pla
 	return sm.store.Save(sd)
 }
 
+// SaveSectionOutlines 缓存某章的小节目录
+func (sm *SessionManager) SaveSectionOutlines(sessionID string, chapterIndex int, sections []agent.Section) error {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return err
+	}
+	if sd.SectionOutlines == nil {
+		sd.SectionOutlines = make(map[int][]agent.Section)
+	}
+	sd.SectionOutlines[chapterIndex] = sections
+	return sm.store.Save(sd)
+}
+
+// GetSectionOutlines 获取某章的小节目录（如果已缓存）
+func (sm *SessionManager) GetSectionOutlines(sessionID string, chapterIndex int) ([]agent.Section, error) {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if sd.SectionOutlines == nil {
+		return nil, nil
+	}
+	sections, ok := sd.SectionOutlines[chapterIndex]
+	if !ok || len(sections) == 0 {
+		return nil, nil
+	}
+	return sections, nil
+}
+
+// SaveSectionContent 缓存某小节的学习内容
+func (sm *SessionManager) SaveSectionContent(sessionID string, chapterIndex, sectionIndex int, content *agent.SectionContent) error {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("%d_%d", chapterIndex, sectionIndex)
+	if sd.SectionContents == nil {
+		sd.SectionContents = make(map[string]*agent.SectionContent)
+	}
+	sd.SectionContents[key] = content
+	return sm.store.Save(sd)
+}
+
+// GetSectionContent 获取某小节的学习内容（如果已缓存）
+func (sm *SessionManager) GetSectionContent(sessionID string, chapterIndex, sectionIndex int) (*agent.SectionContent, error) {
+	sd, err := sm.store.Get(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if sd.SectionContents == nil {
+		return nil, nil
+	}
+	key := fmt.Sprintf("%d_%d", chapterIndex, sectionIndex)
+	content, ok := sd.SectionContents[key]
+	if !ok {
+		return nil, nil
+	}
+	return content, nil
+}
+
 // ====== 自适应诊断辅助方法 ======
 
 // SaveSessionData 直接保存 SessionData

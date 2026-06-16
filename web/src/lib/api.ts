@@ -241,3 +241,39 @@ export async function updateUserModel(model: string): Promise<{ preferred_model:
   if (!res.ok) throw new Error('更新模型失败');
   return res.json();
 }
+
+// ====== 小节目录 / 课堂 ======
+
+export interface Section {
+  title: string;
+  description: string;
+  estimated_minutes: number;
+}
+
+export interface SectionContent {
+  section_title: string;
+  content: string;
+  code_examples: string[];
+  key_points: string[];
+  practice_task: string;
+}
+
+export async function generateSections(sessionId: string, chapterIndex: number): Promise<{ sections: Section[] }> {
+  const res = await fetch(`${API_BASE}/curriculum/sections`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ session_id: sessionId, chapter_index: chapterIndex }),
+  });
+  if (!res.ok) throw new Error('生成小节目录失败');
+  return res.json();
+}
+
+export async function generateSectionContent(sessionId: string, chapterIndex: number, sectionIndex: number): Promise<{ content: SectionContent }> {
+  const res = await fetch(`${API_BASE}/curriculum/section-content`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ session_id: sessionId, chapter_index: chapterIndex, section_index: sectionIndex }),
+  });
+  if (!res.ok) throw new Error('生成学习内容失败');
+  return res.json();
+}

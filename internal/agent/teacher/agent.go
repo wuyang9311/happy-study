@@ -121,3 +121,77 @@ func parseLessonPlan(content string) (*agent.LessonPlan, error) {
 	}
 	return &plan, nil
 }
+
+func parseSections(content string) ([]agent.Section, error) {
+	content = common.CleanJSON(content)
+	var sections []agent.Section
+	if err := json.Unmarshal([]byte(content), &sections); err != nil {
+		return nil, fmt.Errorf("parse sections: %w", err)
+	}
+	return sections, nil
+}
+
+func parseSectionContent(content string) (*agent.SectionContent, error) {
+	content = common.CleanJSON(content)
+	var sc agent.SectionContent
+	if err := json.Unmarshal([]byte(content), &sc); err != nil {
+		return nil, fmt.Errorf("parse section content: %w", err)
+	}
+	return &sc, nil
+}
+
+// GenerateSections 生成某一章的小节目录
+func (t *Teacher) GenerateSections(ctx context.Context, report *agent.DiagnosisReport, chapter *agent.CourseChapter) ([]agent.Section, error) {
+	prompt, err := t.prompts.Render("section_outline", map[string]interface{}{
+		"Topic":             report.Topic,
+		"OverallScore":      report.OverallScore,
+		"Weaknesses":        strings.Join(report.Weaknesses, "、"),
+		"ChapterTitle":      chapter.Title,
+		"ChapterDescription": chapter.Description,
+		"ChapterTopics":     strings.Join(chapter.Topics, "、"),
+		"ChapterDifficulty": chapter.Difficulty,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("render section_outline prompt: %w", err)
+	}
+
+	messages := []*schema.Message{
+		schema.SystemMessage("你是一个经验丰富的技术讲师，擅长拆分课程章节为合理的小节目录。输出严格的 JSON 数组格式。"),
+		schema.UserMessage(prompt),
+	}
+
+	resp, err := t.provider.Generate(ctx, messages)
+	if err != nil {
+		return nil, fmt.Errorf("llm generate sections: %w", err)
+	}
+
+	return parseSections(resp.Content)
+}
+
+// GenerateSectionContent 生成某小节的学习内容
+func (t *Teacher) GenerateSectionContent(ctx context.Context, report *agent.DiagnosisReport, chapter *agent.CourseChapter, section *agent.Section) (*agent.SectionContent, error) {
+	prompt, err := t.prompts.Render("section_content", map[string]interface{}{
+		"Topic":             report.Topic,
+		"OverallScore":      report.OverallScore,
+		"Weaknesses":        strings.Join(report.Weaknesses, "、"),
+		"ChapterTitle":      chapter.Title,
+		"ChapterDifficulty": chapter.Difficulty,
+		"SectionTitle":      section.Title,
+		"SectionDescription": section.Description,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("render section_content prompt: %w", err)
+	}
+
+	messages := []*schema.Message{
+		schema.SystemMessage("你是一个经验丰富的技术讲师，擅长编写深入浅出的技术教学内容。输出严格的 JSON 格式。"),
+		schema.UserMessage(prompt),
+	}
+
+	resp, err := t.provider.Generate(ctx, messages)
+	if err != nil {
+		return nil, fmt.Errorf("llm generate section content: %w", err)
+	}
+
+	return parseSectionContent(resp.Content)
+}

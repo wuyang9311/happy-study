@@ -97,6 +97,8 @@ func main() {
 		api.POST("/curriculum/generate", h.GenerateCurriculum)
 		api.GET("/curriculum/:session_id", h.GetCurriculum)
 		api.POST("/curriculum/lesson", h.GenerateLesson)
+		api.POST("/curriculum/sections", h.GenerateSections)
+		api.POST("/curriculum/section-content", h.GenerateSectionContent)
 
 		api.POST("/diagnosis/stop", h.StopDiagnosis)
 
